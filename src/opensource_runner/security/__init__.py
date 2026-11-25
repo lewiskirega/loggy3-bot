@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+import stat
 from pathlib import Path
+from typing import Callable
 
 SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*([^\s'\"`]+)"),
@@ -94,3 +97,18 @@ def validate_command_argv(command: list[str]) -> list[str]:
                     f"Refusing to execute command containing shell operator '{bad}': {command!r}"
                 )
     return command
+
+
+def force_rmtree(path: Path) -> None:
+    """Remove a directory tree cleanly on both POSIX and Windows (handles read-only .git files)."""
+    if not path.exists():
+        return
+
+    def _handle_readonly(func: Callable[[str], None], target: str, _exc: BaseException) -> None:
+        try:
+            os.chmod(target, stat.S_IWRITE | stat.S_IREAD)
+        except OSError:
+            pass
+        func(target)
+
+    shutil.rmtree(path, onexc=_handle_readonly)

@@ -6,7 +6,6 @@ import json
 import os
 import platform
 import shlex
-import shutil
 import sys
 from pathlib import Path
 from typing import Optional
@@ -37,7 +36,7 @@ from opensource_runner.models import (
     utc_now,
 )
 from opensource_runner.projects import ProjectNotFoundError, ProjectRegistry, inspect_project
-from opensource_runner.security import is_running_as_root
+from opensource_runner.security import force_rmtree, is_running_as_root
 from opensource_runner.typing import TypingOrchestrator, VSCodeController, discover_vscode_cli
 from opensource_runner.typing.platforms import (
     InputBackendError,
@@ -921,7 +920,7 @@ def cmd_clean(
         return
 
     for p in existing:
-        shutil.rmtree(p)
+        force_rmtree(p)
     console.print(f"[green]Cleaned generated data for '{target_id}'.[/green]")
 
 

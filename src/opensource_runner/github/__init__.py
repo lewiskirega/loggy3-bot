@@ -14,7 +14,7 @@ from opensource_runner.models import (
     SourceFileEntry,
     SourceManifest,
 )
-from opensource_runner.security import ensure_within_directory
+from opensource_runner.security import ensure_within_directory, force_rmtree
 
 KNOWN_BINARY_EXTENSIONS: frozenset[str] = frozenset(
     {
@@ -172,7 +172,7 @@ class GitHubRetriever:
         if not cache_dir.exists():
             staging_dir = source_cache_root / project_id / f".tmp-{remote_rev.commit}"
             if staging_dir.exists():
-                shutil.rmtree(staging_dir)
+                force_rmtree(staging_dir)
             staging_dir.parent.mkdir(parents=True, exist_ok=True)
             try:
                 if remote_rev.branch != "detached":
@@ -202,12 +202,12 @@ class GitHubRetriever:
                 # Remove .git directory so source-cache contains pure source files only
                 git_meta = staging_dir / ".git"
                 if git_meta.exists():
-                    shutil.rmtree(git_meta)
+                    force_rmtree(git_meta)
 
                 staging_dir.replace(cache_dir)
             except Exception:
                 if staging_dir.exists():
-                    shutil.rmtree(staging_dir, ignore_errors=True)
+                    force_rmtree(staging_dir)
                 raise
 
         source_origin = "GitHub" if "github.com" in repository.lower() else "Local/Git"

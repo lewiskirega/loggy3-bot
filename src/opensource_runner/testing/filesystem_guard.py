@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from opensource_runner.security import SecurityError
+from opensource_runner.security import SecurityError, force_rmtree
 
 HARNESS_MARKER_FILE = ".opensource-runner-sandbox-marker"
 
@@ -87,5 +86,5 @@ def safe_remove_harness_directory(directory: Path) -> bool:
         raise SecurityError(
             f"Refusing to delete '{resolved}': missing harness marker '{HARNESS_MARKER_FILE}'."
         )
-    shutil.rmtree(resolved)
+    force_rmtree(resolved)
     return not resolved.exists()
