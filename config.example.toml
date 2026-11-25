@@ -1,0 +1,28 @@
+# Example configuration for opensource-runner
+# Copy to config.toml to customize behavior.
+
+[paths]
+projects_dir = "projects"
+source_cache_dir = "source-cache"
+workspace_dir = "workspace"
+state_dir = "state"
+logs_dir = "logs"
+
+[typing]
+# Target characters per second (informational / pacing hint)
+typing_speed = 35
+# Delay between individual keyboard events in milliseconds
+character_delay_ms = 25
+# Delay between files in milliseconds
+file_delay_ms = 500
+# Optional explicit path to VS Code CLI (auto-detected if empty)
+vscode_path = ""
+# Platform input backend: "auto", "windows", "x11", "wayland"
+input_backend = "auto"
+
+[execution]
+# Require interactive approval before installing dependencies
+require_dependency_approval = true
+# Allow container fallback (Docker/Podman) when available
+prefer_container = false
+

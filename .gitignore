@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+dist/
+build/
+*.egg-info/
+.provenance/
+
+# Runtime generated directories (keep structure, ignore generated data)
+source-cache/*
+!source-cache/.gitkeep
+workspace/*
+!workspace/.gitkeep
+state/*
+!state/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# Local user config
+config.toml
+.env
+

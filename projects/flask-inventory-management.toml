@@ -1,0 +1,7 @@
+id = "flask-inventory-management"
+name = "Flask Inventory Management"
+repository = "https://github.com/alaminerca/Flask-Inventory-Management"
+revision = "auto"
+category = "Python / Flask"
+enabled = true
+

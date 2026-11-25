@@ -1,0 +1,7 @@
+id = "flaskblog"
+name = "FlaskBlog"
+repository = "https://github.com/DogukanUrker/flaskBlog"
+revision = "auto"
+category = "Python / Flask"
+enabled = true
+

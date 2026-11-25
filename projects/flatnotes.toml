@@ -1,0 +1,7 @@
+id = "flatnotes"
+name = "flatnotes"
+repository = "https://github.com/dullage/flatnotes"
+revision = "auto"
+category = "Web application"
+enabled = true
+

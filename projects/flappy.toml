@@ -1,0 +1,7 @@
+id = "flappy"
+name = "Flappy"
+repository = "https://github.com/Makivskyi2006/Flappy"
+revision = "auto"
+category = "Game / application"
+enabled = true
+
