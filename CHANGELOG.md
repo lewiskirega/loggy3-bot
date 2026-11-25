@@ -17,3 +17,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Approval-gated isolated execution (`PythonRuntime`, `NodeRuntime`, `PhpRuntime`, `ContainerRuntime`) with command validation.
 - Full CLI including `doctor`, `clean`, `version`, and `--dry-run` support.
 - GitHub Actions CI/CD workflows (`ci.yml`, `security.yml`, `build.yml`, `release.yml`), issue/PR templates, and Windows/Linux documentation.
+

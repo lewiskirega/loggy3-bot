@@ -53,6 +53,20 @@ app = typer.Typer(
 )
 console = Console()
 
+
+@app.callback(invoke_without_command=True)
+def cmd_default(
+    ctx: typer.Context,
+    root_dir: Optional[Path] = typer.Option(None, "--root", hidden=True),
+) -> None:
+    """Launch the interactive terminal wizard when invoked without a subcommand."""
+    if ctx.invoked_subcommand is None:
+        from opensource_runner.interactive import run_interactive_wizard
+
+        code = run_interactive_wizard(root_dir=root_dir)
+        raise typer.Exit(code=code)
+
+
 ATTRIBUTION_NOTICE = (
     "This source originates from a third-party GitHub repository.\n\n"
     "The bot will reproduce the source for learning, development,\n"
@@ -909,6 +923,99 @@ def cmd_clean(
     for p in existing:
         shutil.rmtree(p)
     console.print(f"[green]Cleaned generated data for '{target_id}'.[/green]")
+
+
+@app.command("self-test")
+def cmd_self_test(
+    project: Optional[list[str]] = typer.Option(
+        None, "--project", "-p", help="Specific project ID(s) to test (defaults to --all)."
+    ),
+    all_projects: bool = typer.Option(True, "--all/--no-all", help="Test all registered projects."),
+    input_test: bool = typer.Option(
+        False, "--input", help="Run only the safe isolated input test."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview sandbox self-test without executing."
+    ),
+    cleanup: bool = typer.Option(
+        False, "--cleanup", help="Clean abandoned harness sandbox directories."
+    ),
+    allow_network: bool = typer.Option(
+        False,
+        "--allow-network",
+        help="Allow network access during sandbox dependency installation.",
+    ),
+    no_execute: bool = typer.Option(
+        False, "--no-execute", help="Skip project execution/health checks."
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose tagged logs."),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug tagged logs."),
+    output_dir: Optional[Path] = typer.Option(
+        None, "--output-dir", help="Directory for test-results/."
+    ),
+    root_dir: Optional[Path] = typer.Option(None, "--root", hidden=True),
+) -> None:
+    """Run the automated disposable sandbox test harness for OpenSource Runner."""
+    from opensource_runner.testing import (
+        SelfTestOrchestrator,
+        cleanup_abandoned_sandboxes,
+        render_summary_text,
+    )
+
+    if cleanup:
+        removed = cleanup_abandoned_sandboxes()
+        if not removed:
+            console.print("[green]No abandoned sandbox directories found.[/green]")
+        else:
+            console.print(
+                f"[green]Removed {len(removed)} abandoned sandbox directory(ies):[/green]"
+            )
+            for item in removed:
+                console.print(f"  - {item}")
+        return
+
+    cfg, _, _ = _ctx(root_dir)
+    show_logs = verbose or debug
+
+    def _log(tag: str, msg: str) -> None:
+        if show_logs:
+            console.print(f"[{tag}] {msg}")
+
+    orch = SelfTestOrchestrator(cfg, log_fn=_log)
+    try:
+        summary, exit_code, report_paths = orch.run(
+            project_ids=project,
+            run_all=all_projects if not project else False,
+            input_only=input_test,
+            dry_run=dry_run,
+            allow_network=allow_network,
+            allow_execution=not no_execute,
+            output_dir=output_dir,
+        )
+    except ProjectNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2)
+    except Exception as exc:
+        console.print(f"[red]Self-test infrastructure failure:[/red] {exc}")
+        raise typer.Exit(code=2)
+
+    if dry_run:
+        console.print("\n[bold yellow]SELF-TEST DRY RUN[/bold yellow]\n")
+        for pid, proj in summary.projects.items():
+            console.print(f"- {proj.project_name} ({pid})")
+            console.print(f"  Would retrieve: {proj.repository}")
+            console.print(f"  Would create sandbox: {proj.sandbox_mode}")
+            console.print(
+                f"  Limits: {cfg.sandbox.cpu_limit} CPU, {cfg.sandbox.memory_limit_mb}MB RAM, "
+                f"timeout={cfg.sandbox.execution_timeout_seconds}s"
+            )
+        return
+
+    console.print(render_summary_text(summary))
+    if report_paths:
+        console.print(f"Reports written to: {report_paths['json'].parent}")
+    if exit_code != 0:
+        raise typer.Exit(code=exit_code)
 
 
 @app.command("version")

@@ -26,3 +26,12 @@ require_dependency_approval = true
 # Allow container fallback (Docker/Podman) when available
 prefer_container = false
 
+[sandbox]
+cpu_limit = 2
+memory_limit_mb = 2048
+process_limit = 128
+execution_timeout_seconds = 120
+dependency_timeout_seconds = 300
+healthcheck_timeout_seconds = 60
+network_enabled = false
+

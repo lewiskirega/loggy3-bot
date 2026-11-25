@@ -33,3 +33,4 @@ python -m pip install -e ".[dev]"
 ```
 
 Optional pre-commit hooks are configured in `.pre-commit-config.yaml`.
+

@@ -20,3 +20,4 @@ We will acknowledge receipt and work on a coordinated fix before public disclosu
 - **Least privilege**: The bot does not require root/administrator privileges and warns if run as UID 0.
 - **Secret hygiene**: Potential tokens, passwords, and API keys are redacted from logs; secrets are never written into checkpoints or `.provenance/run-config.json`.
 - **Immutable source cache & workspace boundaries**: Path traversal (`..`) and out-of-tree symlinks are rejected.
+

@@ -118,11 +118,29 @@ class ExecutionConfig(BaseModel):
     prefer_container: bool = False
 
 
+class SandboxConfig(BaseModel):
+    cpu_limit: int = Field(default=2, ge=1, le=64)
+    memory_limit_mb: int = Field(default=2048, ge=128, le=65536)
+    process_limit: int = Field(default=128, ge=16, le=4096)
+    execution_timeout_seconds: int = Field(default=120, ge=5, le=3600)
+    dependency_timeout_seconds: int = Field(default=300, ge=10, le=3600)
+    healthcheck_timeout_seconds: int = Field(default=60, ge=5, le=600)
+    network_enabled: bool = False
+
+
+class UIConfig(BaseModel):
+    appearance: Literal["auto", "rich", "plain"] = "auto"
+    confirm_all_operations: bool = True
+    last_project_id: str | None = None
+
+
 class RunnerConfig(BaseModel):
     root_dir: Path = Field(default_factory=Path.cwd)
     paths: PathsConfig = Field(default_factory=PathsConfig)
     typing: TypingConfig = Field(default_factory=TypingConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    ui: UIConfig = Field(default_factory=UIConfig)
 
     def resolve_path(self, rel_or_abs: Path) -> Path:
         if rel_or_abs.is_absolute():

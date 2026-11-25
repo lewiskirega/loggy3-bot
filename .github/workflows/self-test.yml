@@ -1,0 +1,63 @@
+name: Self-Test Harness
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: "Optional single project ID (leave empty for dry-run / all)"
+        required: false
+        default: ""
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox-self-test:
+    name: Self-Test (${{ matrix.os }} / Python 3.12)
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run self-test dry-run validation
+        run: opensource-runner self-test --dry-run
+
+      - name: Run safe isolated input self-test
+        run: opensource-runner self-test --input
+
+      - name: Run harness unit and chaos tests
+        run: python -m pytest tests/unit/test_self_test_harness.py -v
+
+      - name: Verify sandbox cleanup
+        run: opensource-runner self-test --cleanup
+
+      - name: Upload self-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-test-results-${{ matrix.os }}
+          path: test-results/
+          if-no-files-found: ignore
+

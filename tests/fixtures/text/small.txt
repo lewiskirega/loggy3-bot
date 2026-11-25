@@ -1,0 +1,3 @@
+OpenSource Runner fixture text
+Line 2: !@#$%^&*()
+

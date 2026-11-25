@@ -23,6 +23,7 @@ state/*
 !state/.gitkeep
 logs/*
 !logs/.gitkeep
+test-results/
 
 # Local user config
 config.toml

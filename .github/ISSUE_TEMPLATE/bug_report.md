@@ -21,3 +21,4 @@ A clear description of the bug.
 
 ## Expected vs. Actual Behavior
 ...
+
