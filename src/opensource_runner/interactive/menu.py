@@ -56,4 +56,3 @@ POST_PREPARE_CHOICES: list[MenuChoice] = [
     MenuChoice("main_menu", "Return to main menu"),
     MenuChoice("exit", "Exit"),
 ]
-

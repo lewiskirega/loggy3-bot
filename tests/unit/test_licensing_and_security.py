@@ -53,7 +53,8 @@ def test_path_traversal_and_source_cache_protection(tmp_path: Path) -> None:
 
 
 def test_secret_redaction() -> None:
-    msg = "SMTP_PASSWORD=supersecret123 token=ghp_abcdefghijklmnopqrstuvwxyz012345"
+    fake_tok = "ghp_" + "a" * 30  # gitleaks:allow
+    msg = f"SMTP_PASSWORD=syntheticpass123 token={fake_tok}"
     redacted = redact_secrets(msg)
-    assert "supersecret123" not in redacted
-    assert "ghp_abcdefghijklmnopqrstuvwxyz012345" not in redacted
+    assert "syntheticpass123" not in redacted
+    assert fake_tok not in redacted

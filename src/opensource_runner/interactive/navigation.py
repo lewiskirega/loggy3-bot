@@ -23,4 +23,3 @@ class MenuChoice:
 class SelectionResult:
     action: NavAction
     choice_key: str | None = None
-

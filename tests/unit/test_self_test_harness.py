@@ -32,13 +32,13 @@ runner = CliRunner()
 def test_secret_allowlist_strips_host_credentials(tmp_path: Path) -> None:
     poisoned = {
         "PATH": "/usr/bin",
-        "SSH_PRIVATE_KEY": "secret",
-        "GITHUB_TOKEN": "ghp_1234567890",
-        "AWS_SECRET_ACCESS_KEY": "aws_secret",
-        "AZURE_CLIENT_SECRET": "az_secret",
-        "GCP_PROJECT_KEY": "gcp_secret",
-        "DB_PASSWORD": "pw",
-        "OPENAI_API_KEY": "sk-123",
+        "SSH_PRIVATE_KEY": "synthetic-key",  # gitleaks:allow
+        "GITHUB_TOKEN": "synthetic-" + "gh-token",  # gitleaks:allow
+        "AWS_SECRET_ACCESS_KEY": "synthetic-aws",  # gitleaks:allow
+        "AZURE_CLIENT_SECRET": "synthetic-az",  # gitleaks:allow
+        "GCP_PROJECT_KEY": "synthetic-gcp",  # gitleaks:allow
+        "DB_PASSWORD": "synthetic-pw",  # gitleaks:allow
+        "OPENAI_API_KEY": "synthetic-api",  # gitleaks:allow
     }
     clean = build_sandbox_env(tmp_path, source_env=poisoned)
     assert detect_leaked_secrets(clean) == []

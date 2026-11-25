@@ -30,4 +30,3 @@ def render_progress_snapshot(
         f"file: {progress.current_file or '-'}",
         end="" if progress.percent_complete < 100.0 else "\n",
     )
-

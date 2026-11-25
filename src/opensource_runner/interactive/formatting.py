@@ -98,4 +98,3 @@ def render_status_table(
     for name, status, progress in rows:
         table.add_row(name, status, progress)
     console.print(table)
-

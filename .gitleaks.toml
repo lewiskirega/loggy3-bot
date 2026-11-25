@@ -1,0 +1,11 @@
+title = "OpenSource Runner Gitleaks Config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Allow synthetic non-real test fixture strings in unit tests and self-test security checks"
+regexes = [
+  '''ghp_(?:fake1234567890|1234567890|abcdefghijklmnopqrstuvwxyz012345)''',
+  '''synthetic-[a-z0-9-]+''',
+]

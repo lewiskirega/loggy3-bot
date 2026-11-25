@@ -133,10 +133,10 @@ class SelfTestOrchestrator:
         try:
             poisoned_env = {
                 "PATH": "/usr/bin",
-                "SSH_PRIVATE_KEY": "fake-key",
-                "GITHUB_TOKEN": "ghp_fake1234567890",
-                "AWS_SECRET_ACCESS_KEY": "fake-aws",
-                "DB_PASSWORD": "fake-password",
+                "SSH_PRIVATE_KEY": "synthetic-key-value",  # gitleaks:allow
+                "GITHUB_TOKEN": "synthetic-" + "token-value",  # gitleaks:allow
+                "AWS_SECRET_ACCESS_KEY": "synthetic-aws-value",  # gitleaks:allow
+                "DB_PASSWORD": "synthetic-password-value",  # gitleaks:allow
             }
             clean = build_sandbox_env(tmp_home, source_env=poisoned_env)
             leaked = detect_leaked_secrets(clean)

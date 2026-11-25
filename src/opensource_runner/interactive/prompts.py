@@ -103,4 +103,3 @@ class PromptSession:
         if raw.lower() in ("q", "quit"):
             return NavAction.QUIT, ""
         return NavAction.SELECT, (raw if raw else default)
-

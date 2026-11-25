@@ -96,4 +96,3 @@ def run_interactive_wizard(
         caps=caps,
     )
     return wizard.run()
-

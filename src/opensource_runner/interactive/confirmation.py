@@ -33,4 +33,3 @@ def ask_confirmation(
         if raw in ("n", "no", "b", "q"):
             return False
         prompts.console.print("Please enter 'y' or 'n'.")
-
