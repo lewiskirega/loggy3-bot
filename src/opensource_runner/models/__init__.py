@@ -46,6 +46,7 @@ ALLOWED_TRANSITIONS: dict[ProjectState, set[ProjectState]] = {
         ProjectState.FAILED,
     },
     ProjectState.PAUSED: {
+        ProjectState.PREPARING,
         ProjectState.TYPING,
         ProjectState.VERIFYING,
         ProjectState.PREPARED,
@@ -60,11 +61,13 @@ ALLOWED_TRANSITIONS: dict[ProjectState, set[ProjectState]] = {
     ProjectState.VERIFIED: {
         ProjectState.READY_TO_RUN,
         ProjectState.VERIFYING,
+        ProjectState.PREPARING,
         ProjectState.FAILED,
     },
     ProjectState.READY_TO_RUN: {
         ProjectState.RUNNING,
         ProjectState.VERIFYING,
+        ProjectState.PREPARING,
         ProjectState.FAILED,
     },
     ProjectState.RUNNING: {

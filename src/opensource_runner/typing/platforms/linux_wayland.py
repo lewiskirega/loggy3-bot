@@ -1,4 +1,4 @@
-"""Linux Wayland keyboard input backend with strict fail-closed diagnostics."""
+"""Linux Wayland keyboard input backend with strict socket & fail-closed diagnostics."""
 
 from __future__ import annotations
 
@@ -13,6 +13,22 @@ from opensource_runner.typing.platforms.base import (
     InputBackendError,
     InputController,
 )
+
+
+def resolve_ydotool_socket() -> Path | None:
+    """Locate the active ydotoold UNIX domain socket if present."""
+    env_sock = os.environ.get("YDOTOOL_SOCKET")
+    if env_sock:
+        return Path(env_sock)
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    candidates: list[Path] = []
+    if runtime_dir:
+        candidates.append(Path(runtime_dir) / ".ydotool_socket")
+    candidates.append(Path("/tmp/.ydotool_socket"))
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
 
 
 class LinuxWaylandInputController(InputController):
@@ -58,12 +74,34 @@ class LinuxWaylandInputController(InputController):
                 "No Wayland keyboard backend found. Install `ydotool`, `dotool`, or `wtype`. "
                 "Refusing to fall back to clipboard pasting.",
             )
+
+        if tool == "ydotool":
+            sock = resolve_ydotool_socket()
+            if sock is None or not sock.exists():
+                return BackendHealth(
+                    f"{self.backend_name}-ydotool",
+                    False,
+                    "ydotool is installed, but ydotoold socket was not found "
+                    "(checked $YDOTOOL_SOCKET, $XDG_RUNTIME_DIR/.ydotool_socket, /tmp/.ydotool_socket). "
+                    "Start ydotoold first (e.g. `sudo systemctl enable --now ydotoold`).",
+                )
+            if not os.access(sock, os.R_OK | os.W_OK):
+                return BackendHealth(
+                    f"{self.backend_name}-ydotool",
+                    False,
+                    f"ydotool socket '{sock}' exists but is not accessible (Permission denied). "
+                    "Run ydotoold with your user UID:GID ownership, e.g.: "
+                    f'`sudo ydotoold --socket-path "{sock}" --socket-own "$(id -u):$(id -g)"` '
+                    "or configure a systemd override for ydotoold.",
+                )
+
         return BackendHealth(
-            f"{self.backend_name}-{tool}", True, f"Wayland backend '{tool}' available."
+            f"{self.backend_name}-{tool}",
+            True,
+            f"Wayland backend '{tool}' available and accessible.",
         )
 
     def verify_focus(self, expected_app: str, expected_workspace: Path) -> FocusCheckResult:
-        # Wayland compositors restrict arbitrary window-title queries unless a compositor tool exists.
         swaymsg = shutil.which("swaymsg")
         if swaymsg and "sway" in self.desktop:
             res = subprocess.run(
@@ -125,7 +163,8 @@ class LinuxWaylandInputController(InputController):
             res = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
         if res.returncode != 0:
-            raise InputBackendError(f"Wayland backend '{tool}' failed: {res.stderr.strip()}")
+            err = res.stderr.strip() or res.stdout.strip() or f"exit code {res.returncode}"
+            raise InputBackendError(f"Wayland backend '{tool}' failed: {err}")
 
     def send_hotkey(self, *keys: str) -> None:
         tool = self._selected_tool()
@@ -134,7 +173,6 @@ class LinuxWaylandInputController(InputController):
         normalized = tuple(k.lower() for k in keys)
         if tool == "ydotool" and normalized == ("ctrl", "s"):
             assert self.ydotool_bin is not None
-            # LeftCtrl=29, S=31
             res = subprocess.run(
                 [self.ydotool_bin, "key", "29:1", "31:1", "31:0", "29:0"],
                 capture_output=True,
@@ -162,4 +200,5 @@ class LinuxWaylandInputController(InputController):
         else:
             raise InputBackendError(f"Unsupported hotkey {keys!r} for Wayland backend '{tool}'.")
         if res.returncode != 0:
-            raise InputBackendError(f"Wayland hotkey failed: {res.stderr.strip()}")
+            err = res.stderr.strip() or res.stdout.strip() or f"exit code {res.returncode}"
+            raise InputBackendError(f"Wayland hotkey failed: {err}")

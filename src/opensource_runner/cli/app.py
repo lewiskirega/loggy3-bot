@@ -469,6 +469,7 @@ def _run_typing_flow(
         vscode_controller=vscode,
         typing_config=cfg.typing,
         source_cache_root=cfg.source_cache_path,
+        logger=logger,
         sleep_fn=(lambda _: None) if backend_pref == "mock" else __import__("time").sleep,
     )
 
@@ -515,6 +516,15 @@ def _run_typing_flow(
         console.print(f"File:\n{outcome.failed_file}\n")
         console.print(f"Reason:\n{outcome.message}\n")
         console.print("Typing has been paused.\n\nProject cannot be executed.")
+        raise typer.Exit(code=1)
+
+    if outcome.status == "input_failed":
+        console.print("\n[bold red]INPUT BACKEND FAILED[/bold red]\n")
+        console.print(f"File: {outcome.failed_file or '-'}")
+        console.print(f"Reason: {outcome.message}\n")
+        console.print(
+            "Checkpoint saved as PAUSED. Resolve the input backend issue and run `opensource-runner resume`."
+        )
         raise typer.Exit(code=1)
 
     if outcome.status in ("paused", "stopped"):
@@ -795,6 +805,11 @@ def cmd_config(
 
 @app.command("doctor")
 def cmd_doctor(
+    input_diag: bool = typer.Option(
+        False,
+        "--input",
+        help="Run detailed input backend, VS Code, focus, and keyboard-event diagnostics.",
+    ),
     root_dir: Optional[Path] = typer.Option(None, "--root", hidden=True),
 ) -> None:
     """Diagnose host OS, tools, display server, input backend, and directory permissions."""
@@ -803,17 +818,64 @@ def cmd_doctor(
     vscode_cli = discover_vscode_cli(cfg.typing.vscode_path)
     display = detect_display_platform()
 
+    backend_name = "unknown"
     backend_status = "Unavailable"
     backend_detail = ""
     backend_ok = False
+    ctrl = None
     try:
         ctrl = create_input_controller(cfg.typing.input_backend)
         health = ctrl.check_availability()
+        backend_name = health.backend_name
         backend_ok = health.available
         backend_status = f"Available ({health.backend_name})" if health.available else "Unavailable"
         backend_detail = health.reason
     except InputBackendError as exc:
         backend_detail = str(exc)
+
+    if input_diag:
+        from opensource_runner.testing.environment import parse_os_release
+
+        os_rel = parse_os_release() if platform.system() == "Linux" else {}
+        os_name = os_rel.get("PRETTY_NAME", f"{platform.system()} {platform.release()}")
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "") or platform.system()
+        focus_status = "NOT TESTED"
+        win_det = "NOT TESTED"
+        if ctrl is not None:
+            focus_res = ctrl.verify_focus("VS Code", cfg.workspace_path)
+            if focus_res.verified:
+                focus_status = "PASS"
+                win_det = "PASS"
+            elif display == "wayland" and "gnome" in desktop.lower():
+                focus_status = "UNSUPPORTED"
+                win_det = "UNSUPPORTED"
+            else:
+                focus_status = "FAIL"
+                win_det = "PASS" if focus_res.active_window_title else "FAIL"
+
+        overall = "PASS" if (vscode_cli is not None and backend_ok) else "FAIL"
+        console.print("\n[bold]OPEN SOURCE RUNNER INPUT DIAGNOSTICS[/bold]\n")
+        console.print(f"Operating system:          {os_name}")
+        console.print(f"Desktop environment:       {desktop}")
+        console.print(f"Display session:           {display}")
+        console.print(f"VS Code executable:        {vscode_cli or 'NOT FOUND'}")
+        console.print("")
+        console.print(f"Input backend:             {backend_name}")
+        console.print(f"Backend installed:         {'PASS' if ctrl is not None else 'FAIL'}")
+        console.print(f"Backend available:         {'PASS' if backend_ok else 'FAIL'}")
+        if backend_detail:
+            console.print(f"Backend detail:            {backend_detail}")
+        console.print(f"Window detection:          {win_det}")
+        console.print(
+            f"Window activation:         {'UNSUPPORTED' if display == 'wayland' and 'gnome' in desktop.lower() else 'NOT TESTED'}"
+        )
+        console.print(f"Editor focus detection:    {focus_status}")
+        console.print("")
+        console.print(f"Keyboard event test:       {'NOT TESTED' if backend_ok else 'UNSUPPORTED'}")
+        console.print(f"File save test:            {'NOT TESTED' if backend_ok else 'UNSUPPORTED'}")
+        console.print(f"Exact content verification:{'NOT TESTED' if backend_ok else 'UNSUPPORTED'}")
+        console.print(f"\nOverall result:            {overall}")
+        return
 
     def _is_writable_dir(path: Path) -> bool:
         try:

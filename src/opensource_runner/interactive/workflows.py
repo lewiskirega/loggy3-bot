@@ -27,6 +27,7 @@ from opensource_runner.interactive.navigation import MenuChoice, NavAction
 from opensource_runner.interactive.progress import render_progress_snapshot
 from opensource_runner.interactive.prompts import PromptSession
 from opensource_runner.licensing import inspect_license, write_license_reports
+from opensource_runner.logging_utils import get_project_logger
 from opensource_runner.models import (
     InspectionReport,
     LicenseStatus,
@@ -346,17 +347,41 @@ class InteractiveWorkflows:
             configured_path=self.config.typing.vscode_path,
             dry_run=(self.config.typing.input_backend == "mock"),
         )
+        logger = get_project_logger(self.config.logs_path, cp.project_id)
         orch = TypingOrchestrator(
             checkpoint_manager=self.checkpoints,
             input_controller=input_ctrl,
             vscode_controller=vscode,
             typing_config=self.config.typing,
             source_cache_root=self.config.source_cache_path,
+            logger=logger,
             sleep_fn=(lambda _: None)
             if self.config.typing.input_backend == "mock"
             else __import__("time").sleep,
         )
         self.console.print(f"\nPreparing {cp.project_name} (Press Ctrl+C to pause safely)")
+
+        def _confirm_manual_focus(ws_path: Path, reason: str) -> bool:
+            confirmed = ask_confirmation(
+                self.prompts,
+                title="MANUAL FOCUS CONFIRMATION REQUIRED",
+                summary_lines=[
+                    f"Workspace: {ws_path}",
+                    f"Reason: {reason}",
+                    "Open and click inside the VS Code window for this workspace.",
+                    "After confirming, you will have 3 seconds to focus the VS Code editor.",
+                ],
+                default_yes=False,
+                question="Confirm VS Code workspace is open and ready?",
+            )
+            if confirmed:
+                import time
+
+                for sec in (3, 2, 1):
+                    self.console.print(f"Focus VS Code now... starting in {sec}s")
+                    time.sleep(1)
+            return confirmed
+
         try:
             outcome = orch.reproduce(
                 cp,
@@ -365,6 +390,7 @@ class InteractiveWorkflows:
                 progress_callback=lambda p: render_progress_snapshot(
                     self.console, self.caps, cp.project_name, "Reproducing source files", p
                 ),
+                manual_focus_confirm=_confirm_manual_focus,
             )
         except InputBackendError as exc:
             self.console.print(f"\nInput backend blocked: {exc}")

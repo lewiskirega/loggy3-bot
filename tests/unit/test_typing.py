@@ -75,6 +75,11 @@ def test_typing_pauses_on_focus_failure(tmp_path: Path) -> None:
     loaded = mgr.load_checkpoint("flappy")
     assert loaded is not None and loaded.state == ProjectState.PAUSED
 
+    # Explicit manual focus confirmation (e.g. GNOME Wayland) allows proceeding safely
+    outcome_ok = orch.reproduce(cp, src, ws, manual_focus_confirm=lambda _ws, _reason: True)
+    assert outcome_ok.status == "completed"
+    assert (ws / "Flappy.py").read_text(encoding="utf-8") == "x = 1\n"
+
 
 def test_typing_halts_on_verification_failure_without_auto_repair(tmp_path: Path) -> None:
     src = tmp_path / "source-cache" / "flappy" / "sha1"

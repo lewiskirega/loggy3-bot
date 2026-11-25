@@ -55,3 +55,16 @@ def test_corrupted_checkpoint_raises_explicit_error(tmp_path: Path) -> None:
 
     with pytest.raises(CorruptedCheckpointError):
         mgr.load_checkpoint("flappy")
+
+
+def test_paused_and_ready_projects_can_reenter_preparing(tmp_path: Path) -> None:
+    mgr = CheckpointManager(tmp_path / "state")
+    cp = ProjectCheckpoint(
+        project_id="flask-inventory-management",
+        project_name="Flask Inventory Management",
+        repository="https://github.com/alaminerca/Flask-Inventory-Management",
+        state=ProjectState.PAUSED,
+    )
+    mgr.save_checkpoint(cp)
+    mgr.transition(cp, ProjectState.PREPARING)
+    assert cp.state == ProjectState.PREPARING

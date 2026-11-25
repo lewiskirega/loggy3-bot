@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import time
 from dataclasses import dataclass
@@ -24,13 +25,13 @@ from opensource_runner.typing.platforms import (
     InputBackendError,
     InputController,
 )
-from opensource_runner.typing.vscode import VSCodeController
+from opensource_runner.typing.vscode import VSCodeController, VSCodeNotFoundError
 from opensource_runner.verification import verify_single_file
 
 
 @dataclass
 class TypingOutcome:
-    status: str  # "completed" | "paused" | "stopped" | "focus_failed" | "verification_failed"
+    status: str  # "completed" | "paused" | "stopped" | "focus_failed" | "input_failed" | "verification_failed"
     message: str
     failed_file: str | None = None
     completed_files: int = 0
@@ -38,6 +39,20 @@ class TypingOutcome:
 
 
 ProgressCallback = Callable[[ProjectProgress], None]
+ManualFocusCallback = Callable[[Path, str], bool]
+
+
+def enumerate_source_files(source_dir: Path) -> list[str]:
+    """Enumerate all reproducible source files in source_dir, excluding .git and .provenance."""
+    results: list[str] = []
+    for path in sorted(source_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        rel_parts = path.relative_to(source_dir).parts
+        if ".git" in rel_parts or ".provenance" in rel_parts:
+            continue
+        results.append(path.relative_to(source_dir).as_posix())
+    return results
 
 
 class TypingOrchestrator:
@@ -51,6 +66,7 @@ class TypingOrchestrator:
         vscode_controller: VSCodeController,
         typing_config: TypingConfig,
         source_cache_root: Path,
+        logger: logging.Logger | None = None,
         sleep_fn: Callable[[float], None] = time.sleep,
     ) -> None:
         self.checkpoints = checkpoint_manager
@@ -58,7 +74,12 @@ class TypingOrchestrator:
         self.vscode = vscode_controller
         self.config = typing_config
         self.source_cache_root = source_cache_root.resolve()
+        self.logger = logger
         self.sleep = sleep_fn
+
+    def _log(self, message: str) -> None:
+        if self.logger is not None:
+            self.logger.info("[REPRODUCTION] %s", message)
 
     def reproduce(
         self,
@@ -67,19 +88,33 @@ class TypingOrchestrator:
         workspace_dir: Path,
         *,
         progress_callback: ProgressCallback | None = None,
+        manual_focus_confirm: ManualFocusCallback | None = None,
     ) -> TypingOutcome:
         """Run or resume file-by-file reproduction."""
-        health = self.input_ctrl.check_availability()
-        if not health.available:
-            raise InputBackendError(health.reason)
+        self._log("Starting project reproduction")
+        self._log(f"Project: {checkpoint.project_id}")
 
-        # Build deterministic ordered file list if not already populated
-        all_source_rel = [
-            p.relative_to(source_dir).as_posix()
-            for p in sorted(source_dir.rglob("*"))
-            if p.is_file() and ".git" not in p.parts
-        ]
+        all_source_rel = enumerate_source_files(source_dir)
         total_files = len(all_source_rel)
+        if total_files == 0:
+            return TypingOutcome(
+                status="completed",
+                message="No reproducible source files found in source cache.",
+                completed_files=0,
+                total_files=0,
+            )
+
+        text_rel = [r for r in all_source_rel if classify_file(source_dir / r) == "text"]
+        binary_rel = [r for r in all_source_rel if r not in text_rel]
+        self._log(f"Source files found: {len(text_rel)}")
+        self._log(f"Binary files found: {len(binary_rel)}")
+
+        # Validate input backend availability BEFORE launching VS Code or touching files
+        if text_rel:
+            health = self.input_ctrl.check_availability()
+            if not health.available:
+                self._log(f"Input backend unavailable: {health.reason}")
+                raise InputBackendError(health.reason)
 
         # Validate previously completed files before skipping them
         verified_completed: list[str] = []
@@ -98,13 +133,12 @@ class TypingOrchestrator:
         self.checkpoints.transition(checkpoint, ProjectState.TYPING)
 
         workspace_dir.mkdir(parents=True, exist_ok=True)
-        self.vscode.open_workspace(workspace_dir)
-
         char_delay_s = self.config.character_delay_ms / 1000.0
         file_delay_s = self.config.file_delay_ms / 1000.0
+        manual_focus_confirmed = False
+        first_text_opened = False
 
         for rel in list(remaining):
-            # Check pause/stop control signal before each file
             sig = self.checkpoints.read_control_signal(checkpoint.project_id)
             if sig.action == "pause":
                 self.checkpoints.transition(checkpoint, ProjectState.PAUSED)
@@ -135,6 +169,7 @@ class TypingOrchestrator:
             self.checkpoints.save_checkpoint(checkpoint)
 
             if ftype == "binary":
+                self._log(f"Copying binary file: {rel}")
                 ws_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src_file, ws_file)
                 ver = verify_single_file(rel, src_file, ws_file, "binary")
@@ -152,34 +187,57 @@ class TypingOrchestrator:
                         total_files=total_files,
                     )
             else:
-                # Focus verification before typing text file
-                focus = self.input_ctrl.verify_focus("VS Code", workspace_dir)
-                if not focus.verified:
-                    self.checkpoints.transition(
-                        checkpoint,
-                        ProjectState.PAUSED,
-                        error=f"Focus could not be verified: {focus.reason}",
-                    )
+                self._log(f"Opening target file: {rel}")
+                # If partial file exists from an interrupted run, verify first; never assume valid
+                if ws_file.exists():
+                    pre_ver = verify_single_file(rel, src_file, ws_file, "text")
+                    if not pre_ver.verified:
+                        ws_file.write_bytes(b"")
+
+                try:
+                    if not first_text_opened:
+                        self.vscode.open_workspace(workspace_dir, initial_file=ws_file)
+                        first_text_opened = True
+                    else:
+                        self.vscode.open_file(workspace_dir, ws_file)
+                except VSCodeNotFoundError as exc:
+                    self.checkpoints.transition(checkpoint, ProjectState.PAUSED, error=str(exc))
                     return TypingOutcome(
-                        status="focus_failed",
-                        message=focus.reason,
+                        status="input_failed",
+                        message=str(exc),
                         failed_file=rel,
                         completed_files=len(checkpoint.completed_files),
                         total_files=total_files,
                     )
 
-                # If partial file exists from an interrupted run, verify first; never assume valid
-                if ws_file.exists():
-                    pre_ver = verify_single_file(rel, src_file, ws_file, "text")
-                    if not pre_ver.verified:
-                        # Clear invalid partial file before fresh reproduction
-                        ws_file.write_bytes(b"")
-
-                self.vscode.open_file(workspace_dir, ws_file)
+                self._log("Waiting for editor readiness")
                 self.input_ctrl.prepare_target_file(ws_file)
+                if file_delay_s > 0:
+                    self.sleep(min(1.0, max(0.5, file_delay_s)))
+
+                self._log("Checking editor focus")
+                focus = self.input_ctrl.verify_focus("VS Code", workspace_dir)
+                if not focus.verified:
+                    if not manual_focus_confirmed and manual_focus_confirm is not None:
+                        manual_focus_confirmed = manual_focus_confirm(workspace_dir, focus.reason)
+                    if not manual_focus_confirmed:
+                        self.checkpoints.transition(
+                            checkpoint,
+                            ProjectState.PAUSED,
+                            error=f"Focus could not be verified: {focus.reason}",
+                        )
+                        return TypingOutcome(
+                            status="focus_failed",
+                            message=focus.reason,
+                            failed_file=rel,
+                            completed_files=len(checkpoint.completed_files),
+                            total_files=total_files,
+                        )
 
                 text = src_file.read_bytes().decode("utf-8")
                 total_chars = len(text)
+                self._log("Starting keyboard input")
+                dispatched = 0
                 try:
                     for idx, ch in enumerate(text, start=1):
                         if idx % 25 == 0:
@@ -195,6 +253,7 @@ class TypingOrchestrator:
                                 )
 
                         self.input_ctrl.type_character(ch)
+                        dispatched += 1
                         checkpoint.current_position = idx
                         if char_delay_s > 0:
                             self.sleep(char_delay_s)
@@ -215,6 +274,10 @@ class TypingOrchestrator:
                                 percent_complete=round(pct, 2),
                             )
                             progress_callback(prog)
+
+                    self._log(f"Characters dispatched: {dispatched}/{total_chars}")
+                    self._log("Saving file")
+                    self.input_ctrl.send_hotkey("ctrl", "s")
                 except KeyboardInterrupt:
                     self.checkpoints.transition(
                         checkpoint, ProjectState.PAUSED, error="Interrupted by user (SIGINT)."
@@ -225,9 +288,21 @@ class TypingOrchestrator:
                         completed_files=len(checkpoint.completed_files),
                         total_files=total_files,
                     )
+                except InputBackendError as exc:
+                    self._log(f"Input backend failed during '{rel}': {exc}")
+                    self.checkpoints.transition(
+                        checkpoint,
+                        ProjectState.PAUSED,
+                        error=f"Input backend failed during {rel}: {exc}",
+                    )
+                    return TypingOutcome(
+                        status="input_failed",
+                        message=str(exc),
+                        failed_file=rel,
+                        completed_files=len(checkpoint.completed_files),
+                        total_files=total_files,
+                    )
 
-                # Save via Ctrl+S and verify from disk
-                self.input_ctrl.send_hotkey("ctrl", "s")
                 ver = verify_single_file(rel, src_file, ws_file, "text")
                 if not ver.verified:
                     self.checkpoints.transition(
@@ -242,8 +317,8 @@ class TypingOrchestrator:
                         completed_files=len(checkpoint.completed_files),
                         total_files=total_files,
                     )
+                self._log(f"File reproduction complete: {rel}")
 
-            # File succeeded — update checkpoint & progress
             checkpoint.completed_files.append(rel)
             checkpoint.remaining_files = [r for r in checkpoint.remaining_files if r != rel]
             checkpoint.current_file = None
