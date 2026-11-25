@@ -132,8 +132,9 @@ def test_all_three_additional_project_archetypes_end_to_end(tmp_path: Path) -> N
 
         r = runner.invoke(app, ["run", "--dry-run", "--root", str(bot_root)])
         assert r.exit_code == 0, r.stdout
-        assert cmd_token in r.stdout
-        assert port_token in r.stdout
+        flat_out = "".join(r.stdout.splitlines())
+        assert cmd_token in flat_out
+        assert port_token in flat_out
 
     # Confirm workspaces are strictly isolated
     assert (bot_root / "workspace" / "flask-inventory-management" / "flaskmain.py").is_file()

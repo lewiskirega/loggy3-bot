@@ -106,6 +106,8 @@ class GitHubRetriever:
                 cwd=str(cwd) if cwd else None,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 check=False,
             )
@@ -251,7 +253,7 @@ class GitHubRetriever:
         if not cache_dir.exists():
             staging = source_cache_root / project_id / f".tmp-{snapshot_id}"
             if staging.exists():
-                shutil.rmtree(staging)
+                force_rmtree(staging)
             staging.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(
                 src, staging, ignore=shutil.ignore_patterns(".git", "__pycache__", ".venv")

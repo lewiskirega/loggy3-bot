@@ -101,7 +101,7 @@ def test_end_to_end_flappy_pipeline(tmp_path: Path) -> None:
     # 10. run --dry-run
     r = runner.invoke(app, ["run", "--dry-run", "--root", str(bot_root)])
     assert r.exit_code == 0
-    assert "Flappy.py" in r.stdout
+    assert "Flappy.py" in "".join(r.stdout.splitlines())
 
     # 11. status
     r = runner.invoke(app, ["status", "--root", str(bot_root)])

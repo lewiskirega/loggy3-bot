@@ -56,7 +56,7 @@ def create_console(caps: TerminalCapabilities) -> Console:
     return Console(
         no_color=not caps.supports_color or caps.plain_mode,
         force_terminal=caps.supports_color and not caps.plain_mode,
-        legacy_windows=(sys.platform == "win32" and caps.plain_mode),
+        legacy_windows=(sys.platform == "win32" and caps.is_tty and caps.plain_mode),
     )
 
 
