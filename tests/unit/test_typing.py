@@ -104,11 +104,11 @@ def test_resume_skips_already_verified_files_and_retypes_interrupted(tmp_path: P
     ws = tmp_path / "workspace" / "flappy"
     src.mkdir(parents=True)
     ws.mkdir(parents=True)
-    (src / "a.py").write_text("a = 1\n", encoding="utf-8")
-    (src / "b.py").write_text("b = 2\n", encoding="utf-8")
+    (src / "a.py").write_bytes(b"a = 1\n")
+    (src / "b.py").write_bytes(b"b = 2\n")
     # Simulate a.py already verified and b.py partially typed
-    (ws / "a.py").write_text("a = 1\n", encoding="utf-8")
-    (ws / "b.py").write_text("b = ", encoding="utf-8")
+    (ws / "a.py").write_bytes(b"a = 1\n")
+    (ws / "b.py").write_bytes(b"b = ")
 
     mock_input = MockInputController(focus_ok=True)
     mgr, orch = _make_orchestrator(tmp_path, mock_input)
