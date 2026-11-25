@@ -98,8 +98,10 @@ class DisposableSandbox:
         ]
         if not network_enabled:
             args.extend(["--network", "none"])
-        if hasattr(os, "getuid") and hasattr(os, "getgid"):
-            args.extend(["--user", f"{os.getuid()}:{os.getgid()}"])
+        getuid = getattr(os, "getuid", None)
+        getgid = getattr(os, "getgid", None)
+        if callable(getuid) and callable(getgid):
+            args.extend(["--user", f"{getuid()}:{getgid()}"])
         if extra_env:
             for key, val in extra_env.items():
                 args.extend(["-e", f"{key}={val}"])
